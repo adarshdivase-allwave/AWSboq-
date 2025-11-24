@@ -16,7 +16,7 @@ import PrintHeader from './components/PrintHeader';
 
 import { BoqItem, ClientDetails as ClientDetailsType, Room, Toast as ToastType, Theme, BrandingSettings, Currency } from './types';
 import { generateBoq, refineBoq, generateRoomVisualization, validateBoq, generateRoomSchematic } from './services/geminiService';
-import { exportToXlsx } from './utils/exportToXlsx';
+import { exportToXlsx } from './utils/exportToXlsx'; // This now points to the new ExcelJS implementation
 import { getExchangeRates } from './utils/currency';
 
 import SparklesIcon from './components/icons/SparklesIcon';
@@ -375,7 +375,6 @@ const App: React.FC = () => {
 
   const handleBoqItemAdd = () => {
     if (!activeRoomId) return;
-    // Fix: Add the required 'source' property to the new BoqItem.
     const newItem: BoqItem = {
       category: '',
       itemDescription: 'New Item',
@@ -495,7 +494,7 @@ const App: React.FC = () => {
                 </button>
                 <button onClick={handleExport} disabled={!canExport || isExporting} className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 disabled:bg-slate-500 disabled:cursor-not-allowed">
                   {isExporting ? <LoaderIcon /> : <DownloadIcon />}
-                  {isExporting ? 'Exporting...' : 'Export to XLSX'}
+                  {isExporting ? 'Exporting...' : 'Export to Excel'}
                 </button>
                 <button onClick={() => setIsCompareModalOpen(true)} disabled={rooms.filter(r => r.boq && r.boq.length > 0).length < 2} className="w-full inline-flex items-center justify-center px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md shadow-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 disabled:bg-slate-200 dark:disabled:bg-slate-600 disabled:text-slate-400 dark:disabled:text-slate-400 disabled:cursor-not-allowed">
                   <CompareIcon /> Compare Rooms
