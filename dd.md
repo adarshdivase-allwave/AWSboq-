@@ -1,109 +1,114 @@
-# technical documentation: BINGO
+# Technical Documentation: BINGO System
 
 ## 1. Introduction
-This document details the technical implementation of BINGO, including the technology stack, codebase structure, data models, and deployment procedures. It is intended for developers maintaining or extending the system.
+This document serves as the comprehensive technical reference for the **BINGO** (Bill of Quantities) application. It details the architectural decisions, component interactions, data schemas, and deployment strategies required to maintain and extend the system.
 
-## 2. Technology Stack
+## 2. Technology Stack Strategy
 
-### 2.1. Frontend
-- **Framework**: React 18
-- **Build Tool**: Vite (offering fast HMR and optimized builds)
-- **Language**: TypeScript 5.3 (ensuring type safety)
-- **Styling**: Vanilla CSS with localized module patterns
-- **State Management**: React Context & Hooks
+The system is built on a modern, typed stack designed for scalability, maintainability, and developer experience.
 
-### 2.2. Backend & Cloud (AWS Amplify)
-- **Authentication**: Amazon Cognito (User Pools & Identity Pools)
-- **Database**: Amazon DynamoDB (NoSQL database for high scalability)
-- **API**: AWS AppSync / Amplify DataStore (GraphQL-based data interaction)
+### 2.1. Frontend Ecosystem
+*   **Core Framework**: **React 18** - Enables a component-based architecture with complex state management.
+*   **Build System**: **Vite** - Selected for its superior build performance (ESBuild under the hood) and fast Hot Module Replacement (HMR).
+*   **Language**: **TypeScript 5.3** - Enforces type safety across the application, significantly reducing runtime errors and improving code discoverability.
+*   **Styling**: **Vanilla CSS / CSS Modules** - Provides granular control over styling without the overhead of runtime-in-JS libraries.
+*   **State Management**: **React Context API** - efficiently manages global application state (User Context, Application Settings) without external dependencies like Redux.
 
-### 2.3. AI Integration
-- **Service**: Google Gemini (Custom Generative AI models)
-- **SDK**: `@google/generative-ai`
-- **Function**: Processes unstructured room data to output structured BOQ items (category, description, price estimates).
+### 2.2. Backend & Infrastructure (Serverless)
+The backend is completely serverless, managed via **AWS Amplify**.
+*   **Authentication**: **Amazon Cognito**
+    *   Manages User Pools and Identity Pools.
+    *   Handles JWT token rotation and secure session storage.
+*   **Data Persistence**: **Amazon DynamoDB**
+    *   NoSQL database design for flexible data modeling.
+    *   Single-table design patterns optimized for quick lookups by ID and Email.
+*   **API Layer**: **Amplify DataStore / AppSync**
+    *   Provides a GraphQL interface for data operations.
+    *   Offers built-in offline capabilities and conflict resolution.
 
-## 3. Codebase Structure
+### 2.3. AI Services
+*   **Provider**: **Google Gemini (Generative AI)**
+*   **Integration**: Direct integration via `@google/generative-ai` SDK.
+*   **Usage**: The system sends engineered prompts containing room metadata to the model, which returns structured JSON arrays of equipment.
+
+## 3. Application Architecture
+
+### 3.1. Directory Structure
+The codebase follows a feature-based modular pattern:
 
 ```bash
-BINGO/
-├── amplify/                  # AWS Amplify backend configuration
-├── src/
-│   ├── components/           # Reusable UI components
-│   │   ├── AdminDashboard.tsx# User & Log management interface
-│   │   ├── AppWrapper.tsx    # Main context provider
-│   │   ├── AuthGate.tsx      # Security wrapper for protected routes
-│   │   └── ...
-│   ├── services/             # Logic & API layers
-│   │   ├── geminiService.ts  # Integration with Google Gemini API
-│   │   ├── userManagement.ts # Admin operations (CRUD users)
-│   │   └── ...
-│   ├── types.ts              # Global TypeScript interfaces
-│   ├── App.tsx               # Main application router/layout
-│   └── main.tsx              # Entry point
-├── package.json              # Dependencies & Scripts
-└── vite.config.ts            # Vite configuration
+src/
+├── components/          # UI Component Library
+│   ├── admin/           # Admin-specific views (User List, Logs)
+│   ├── dashboard/       # Project management views
+│   ├── room/            # Core BOQ editor implementations
+│   └── shared/          # Atomic components (Buttons, Inputs, Modals)
+├── services/            # Business Logic & API Abstractions
+│   ├── geminiService.ts # AI Prompt Engineering & API Handling
+│   ├── userDefs.ts      # User Management Service
+│   └── logger.ts        # Activity Logging Service
+├── styles/              # Global variables and resets
+└── types.ts             # Centralized Type Definitions (Single Source of Truth)
 ```
 
-## 4. Key Data Models (`src/types.ts`)
+### 3.2. Data Architecture
 
-### 4.1. User (`AppUser`)
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string | Unique User ID |
-| `email` | string | User's email address |
-| `role` | `ADMIN` / `USER` | Permissions level |
-| `status` | `ACTIVE` / `INACTIVE` | Account state |
+#### 3.2.1. Entity Relationships
+*   **User** (1) --- (Many) ---> **Activity Logs**
+*   **User** (1) --- (Many) ---> **Projects** (Implicit ownership)
+*   **Room** (1) --- (1) ---> **BOQ** (Bill of Quantities)
 
-### 4.2. Activity Log (`ActivityLog`)
-| Field | Type | Description |
-|-------|------|-------------|
-| `action` | Enum | e.g., `LOGIN`, `EXPORT_BOQ` |
-| `userId` | string | ID of the actor |
-| `details` | JSON | Metadata about the event |
-| `timestamp` | ISO String | When the event occurred |
+#### 3.2.2. Core Data Models (`src/types.ts`)
 
-### 4.3. BOQ Item (`BoqItem`)
-Core unit of the application.
+**User Entity (`AppUser`)**
+Defines system actors with role-based attributes.
 ```typescript
-interface BoqItem {
-  category: string;       // e.g., "Video"
-  itemDescription: string;// e.g., "65 inch 4K Display"
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;     // Calc: quantity * unitPrice
-  source: 'database' | 'web';
+interface AppUser {
+  id: string;          // UUID v4
+  email: string;       // Primary identifier for logging
+  role: 'ADMIN' | 'USER';
+  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+  createdAt: string;   // ISO 8601
 }
 ```
 
-## 5. Setup & Development
-
-### 5.1. Prerequisites
-- Node.js (v18+)
-- Active AWS Account (for Amplify)
-- Google Cloud API Key (for Gemini)
-
-### 5.2. Environment Variables
-Create a `.env.local` file:
-```env
-VITE_GEMINI_API_KEY=your_key_here
+**Activity Log Entity (`ActivityLog`)**
+Immutable record of system events for auditing.
+```typescript
+interface ActivityLog {
+  id: string;
+  action: ActivityAction; // Strong typed Enum (e.g., 'EXPORT_BOQ')
+  details: Record<string, any>; // Flexible payload for event metadata
+  ipAddress?: string;
+  userAgent?: string;
+}
 ```
 
-### 5.3. Installation & Running
-```bash
-# Install dependencies
-npm install
+## 4. Security & Compliance
 
-# Start development server
-npm run dev
-```
+### 4.1. Access Control
+*   **Frontend**: `AuthGate.tsx` serves as a higher-order component (HOC) that wraps protected routes. It checks:
+    1.  Is the user authenticated?
+    2.  Is the user status `ACTIVE`?
+    3.  Does the user have the required `role` for the route?
+*   **Backend**: AWS IAM roles restrict DynamoDB access. Using Cognito groups to map to IAM policies is recommended for production.
 
-### 5.4. Build for Production
-```bash
-npm run build
-# Output located in /dist
-```
+### 4.2. Data Privacy
+*   **Logging**: Sensitive data (passwords) is never logged.
+*   **Isolation**: The `fetchActivityLogs` service automatically filters results based on the requester's role (Admins see all; Users see self).
 
-## 6. Security Implementation
-- **Role-Based Access Control (RBAC)**: Implemented in `AuthGate.tsx`. Non-admin users are physically prevented from accessing `/admin` routes.
-- **Data Isolation**: Application logic filters logs so standard users only see their own history, while Admins see all.
-- **Audit Logging**: Critical actions (Login, Export, User Changes) are immutable records in the `ActivityLog` table.
+## 5. Development workflows
+
+### 5.1. Setup
+1.  **Clone Repository**: `git clone ...`
+2.  **Dependencies**: `npm install` (Ensure Node.js v18+)
+3.  **Environment**: 
+    *   Configure `amplify pull` to sync backend config.
+    *   Set `VITE_GEMINI_API_KEY` in `.env.local`.
+
+### 5.2. Build & Optimization
+The `npm run build` command triggers `tsc` (TypeScript Compiler) for type checking followed by `vite build`. The output is a highly optimized, minified bundle in the `dist/` directory, ready for CDN deployment (e.g., AWS CloudFront).
+
+### 5.3. Error Handling
+*   **Global**: AppWrapper catches unhandled promise rejections.
+*   **Service Level**: All API calls (Gemini, DynamoDB) are wrapped in `try-catch` blocks with standardized error logging to the console and Activity Log.
