@@ -1,65 +1,109 @@
-# design document: BINGO - AI-Powered BOQ Management System
+# technical documentation: BINGO
 
-## 1. Executive Summary
-BINGO is a modern, web-based application designed to streamline the creation of Bill of Quantities (BOQ) for engineering and construction projects. By leveraging the power of Generative AI (Google Gemini) and a robust user management system, BINGO allows professionals to rapidly generate, edit, and export detailed component lists and pricing estimates. It replaces manual, error-prone spreadsheet processes with an intelligent, automated workflow.
+## 1. Introduction
+This document details the technical implementation of BINGO, including the technology stack, codebase structure, data models, and deployment procedures. It is intended for developers maintaining or extending the system.
 
-## 2. User Personas
+## 2. Technology Stack
 
-### 2.1. The Administrator
-- **Role**: System Overseer & Manager.
-- **Responsibilities**:
-    - Managing user accounts (creation, suspension, role assignment).
-    - Monitoring system security and usage through activity logs.
-    - Ensuring data integrity and compliance.
-- **Goals**: Prevent unauthorized access and maintain a healthy system environment.
+### 2.1. Frontend
+- **Framework**: React 18
+- **Build Tool**: Vite (offering fast HMR and optimized builds)
+- **Language**: TypeScript 5.3 (ensuring type safety)
+- **Styling**: Vanilla CSS with localized module patterns
+- **State Management**: React Context & Hooks
 
-### 2.2. The Engineer / Quantity Surveyor (User)
-- **Role**: Daily Operator.
-- **Responsibilities**:
-    - Configuring project details (client info, room specifications).
-    - Generating BOQs using AI assistance.
-    - Validating and refining generated data (pricing, brands, models).
-    - Exporting final documents for clients.
-- **Goals**: Produce accurate BOQs quickly to improve proposal turnaround time.
+### 2.2. Backend & Cloud (AWS Amplify)
+- **Authentication**: Amazon Cognito (User Pools & Identity Pools)
+- **Database**: Amazon DynamoDB (NoSQL database for high scalability)
+- **API**: AWS AppSync / Amplify DataStore (GraphQL-based data interaction)
 
-## 3. User Stories & Core Workflows
+### 2.3. AI Integration
+- **Service**: Google Gemini (Custom Generative AI models)
+- **SDK**: `@google/generative-ai`
+- **Function**: Processes unstructured room data to output structured BOQ items (category, description, price estimates).
 
-### 3.1. Authentication & Access
-- **As a User**, I want to log in securely so that my work is saved and attributed to me.
-- **As an Admin**, I want to control who has access so that confidential project data is protected.
-- **Flow**: User enters credentials -> System validates against Cognito & Database -> Access Granted (if Active).
+## 3. Codebase Structure
 
-### 3.2. Project Setup ("The Room")
-- **As a User**, I want to define specific parameters for a "Room" (e.g., Conference Room, Auditorium) so the AI understands the context.
-- **Flow**: Dashboard -> "Add Room" -> Select Template (or Custom) -> Input Dimensions/Capacity -> Save.
-
-### 3.3. AI-Assisted BOQ Generation
-- **As a User**, I want the system to suggest a list of necessary equipment based on my room details so I don't miss critical items.
-- **Flow**: Open Room -> Click "Generate BOQ" -> AI Analyzes Inputs -> Populates Item List (Screens, Audio, Cables, etc.).
-
-### 3.4. Refining & Exporting
-- **As a User**, I want to manually adjust prices and quantities and then export to Excel so I can present it to a client.
-- **Flow**: Review Items -> Edit "Unit Price" / "Quantity" -> Click "Export Excel" -> Download .xlsx file.
-
-## 4. High-Level Architecture
-
-### 4.1. Frontend Information Architecture
-- **Dashboard**: Central hub showing recent projects and quick actions.
-- **Room Interface**: specialized view for individual BOQ editing.
-- **Admin Panel**: Restricted area for user and log management.
-
-### 4.2. System Context
-```mermaid
-graph TD
-    User[End User] -->|HTTPS| WebApp[React Web App]
-    WebApp -->|Auth & Data| Amplify[AWS Amplify]
-    WebApp -->|AI Generation| Gemini[Google Gemini API]
-    Amplify -->|Identity| Cognito[Amazon Cognito]
-    Amplify -->|Storage| DynamoDB[Amazon DynamoDB]
+```bash
+BINGO/
+├── amplify/                  # AWS Amplify backend configuration
+├── src/
+│   ├── components/           # Reusable UI components
+│   │   ├── AdminDashboard.tsx# User & Log management interface
+│   │   ├── AppWrapper.tsx    # Main context provider
+│   │   ├── AuthGate.tsx      # Security wrapper for protected routes
+│   │   └── ...
+│   ├── services/             # Logic & API layers
+│   │   ├── geminiService.ts  # Integration with Google Gemini API
+│   │   ├── userManagement.ts # Admin operations (CRUD users)
+│   │   └── ...
+│   ├── types.ts              # Global TypeScript interfaces
+│   ├── App.tsx               # Main application router/layout
+│   └── main.tsx              # Entry point
+├── package.json              # Dependencies & Scripts
+└── vite.config.ts            # Vite configuration
 ```
 
-## 5. User Experience (UX) Principles
-- **Efficiency**: Minimize clicks to generate a full BOQ.
-- **Clarity**: Use clear visual distinction between AI-suggested values and confirmed values.
-- **Responsiveness**: Ensure the interface works smoothly on tablets and desktops for on-site usage.
-- **Professionalism**: The UI reflects a high-end engineering tool (clean lines, data-focused layout).
+## 4. Key Data Models (`src/types.ts`)
+
+### 4.1. User (`AppUser`)
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique User ID |
+| `email` | string | User's email address |
+| `role` | `ADMIN` / `USER` | Permissions level |
+| `status` | `ACTIVE` / `INACTIVE` | Account state |
+
+### 4.2. Activity Log (`ActivityLog`)
+| Field | Type | Description |
+|-------|------|-------------|
+| `action` | Enum | e.g., `LOGIN`, `EXPORT_BOQ` |
+| `userId` | string | ID of the actor |
+| `details` | JSON | Metadata about the event |
+| `timestamp` | ISO String | When the event occurred |
+
+### 4.3. BOQ Item (`BoqItem`)
+Core unit of the application.
+```typescript
+interface BoqItem {
+  category: string;       // e.g., "Video"
+  itemDescription: string;// e.g., "65 inch 4K Display"
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;     // Calc: quantity * unitPrice
+  source: 'database' | 'web';
+}
+```
+
+## 5. Setup & Development
+
+### 5.1. Prerequisites
+- Node.js (v18+)
+- Active AWS Account (for Amplify)
+- Google Cloud API Key (for Gemini)
+
+### 5.2. Environment Variables
+Create a `.env.local` file:
+```env
+VITE_GEMINI_API_KEY=your_key_here
+```
+
+### 5.3. Installation & Running
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+
+### 5.4. Build for Production
+```bash
+npm run build
+# Output located in /dist
+```
+
+## 6. Security Implementation
+- **Role-Based Access Control (RBAC)**: Implemented in `AuthGate.tsx`. Non-admin users are physically prevented from accessing `/admin` routes.
+- **Data Isolation**: Application logic filters logs so standard users only see their own history, while Admins see all.
+- **Audit Logging**: Critical actions (Login, Export, User Changes) are immutable records in the `ActivityLog` table.
